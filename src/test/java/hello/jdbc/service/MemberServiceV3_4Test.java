@@ -5,7 +5,6 @@ import hello.jdbc.repository.MemberRepositoryV3;
 import lombok.extern.slf4j.Slf4j;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.support.AopUtils;
@@ -23,42 +22,39 @@ import java.sql.SQLException;
 import static hello.jdbc.connection.ConnectionConst.*;
 
 /**
- * 트랜잭션 - @Transactional AOP
+ * 트랜잭션 - Datasource, TransactionManager 자동 등록
  */
 @Slf4j
 @SpringBootTest
-class MemberServiceV3_3Test {
+class MemberServiceV3_4Test {
 
     public static final String Member_A = "memberA";
     public static final String Member_B = "memberB";
     public static final String Member_EX = "ex";
+
     @Autowired
     private MemberServiceV3_3 memberService;
     @Autowired
     private MemberRepositoryV3 memberRepository;
 
-    @TestConfiguration
-    static class TestConfig {
-        @Bean
-        MemberServiceV3_3 memberServiceV3_3() {
-            return new MemberServiceV3_3(memberRepositoryV3());
-        }
+        @TestConfiguration
+        static class TestConfig {
+            private final DataSource dataSource;
 
-        @Bean
-        MemberRepositoryV3 memberRepositoryV3() {
-            return new MemberRepositoryV3(dataSource());
-        }
+            public TestConfig(DataSource dataSource) {
+                this.dataSource = dataSource;
+            }
 
-        @Bean
-        DataSource dataSource() {
-            return new DriverManagerDataSource(URL, USER, PASSWORD);
-        }
+            @Bean
+            MemberServiceV3_3 memberServiceV3_3() {
+                return new MemberServiceV3_3(memberRepositoryV3());
+            }
 
-        @Bean
-        PlatformTransactionManager transactionManager() {
-            return new DataSourceTransactionManager(dataSource());
+            @Bean
+            MemberRepositoryV3 memberRepositoryV3() {
+                return new MemberRepositoryV3(dataSource);
+            }
         }
-    }
 
     @AfterEach
     void after() throws SQLException {

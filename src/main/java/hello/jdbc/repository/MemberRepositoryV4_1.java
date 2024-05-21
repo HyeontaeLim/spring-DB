@@ -1,17 +1,33 @@
 package hello.jdbc.repository;
 
-import hello.jdbc.connection.DBConnectionUtil;
 import hello.jdbc.domain.Member;
+import hello.jdbc.repository.ex.MyDbException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.datasource.DataSourceUtils;
+import org.springframework.jdbc.support.JdbcUtils;
 
+import javax.sql.DataSource;
 import java.sql.*;
 import java.util.NoSuchElementException;
 
+/**
+ * 예외 누수 문제 해결
+ *체크 예외를 런타임 예외로 변경
+ * MemberRepository 사용
+ *throw SQLException 제거
+ */
+
 @Slf4j
-public class MemberRepositoryV0 implements MemberRepositoryEx {
+public class MemberRepositoryV4_1 implements MemberRepository {
+
+    private final DataSource dataSource;
+
+    public MemberRepositoryV4_1(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
 
     @Override
-    public Member save(Member member) throws SQLException {
+    public Member save(Member member){
         String sql = "insert into member(member_id, money) values (?, ?)";
 
         Connection con = null;
@@ -25,22 +41,21 @@ public class MemberRepositoryV0 implements MemberRepositoryEx {
             pstmt.executeUpdate();
             return member;
         } catch (SQLException e) {
-            log.error("db error", e);
-            throw e;
-        } finally {
+            throw new MyDbException(e);
+        }finally {
             close(con, pstmt, null);
         }
     }
 
     @Override
-    public Member findById(String memberId) throws SQLException {
+    public Member findById(String memberId) {
         String sql = "select * from member where member_id = ?";
 
         Connection con = null;
         PreparedStatement pstmt = null;
         ResultSet rs = null;
 
-        try{
+        try {
             con = getConnection();
             pstmt = con.prepareStatement(sql);
             pstmt.setString(1, memberId);
@@ -55,16 +70,14 @@ public class MemberRepositoryV0 implements MemberRepositoryEx {
                 throw new NoSuchElementException("member not found member id : " + memberId);
             }
 
-        } catch(SQLException e){
-            log.error("db error");
-            throw e;
-        }finally {
+        } catch (SQLException e) {
+            throw new MyDbException(e);
+        } finally {
             close(con, pstmt, rs);
         }
     }
-
     @Override
-    public void update(String memberId, int money) throws SQLException {
+    public void update(String memberId, int money) {
         String sql = "update member set money = ? where member_id = ?";
         Connection con = null;
         PreparedStatement pstmt = null;
@@ -76,16 +89,14 @@ public class MemberRepositoryV0 implements MemberRepositoryEx {
             pstmt.setString(2, memberId);
             int resultSize = pstmt.executeUpdate();
             log.info("resultSize = {}", resultSize);
-        }catch(SQLException e){
-            log.error("db error", e);
-            throw e;
+        }catch(SQLException e){;
+            throw new MyDbException(e);
         }finally {
             close(con, pstmt, null);
         }
     }
-
     @Override
-    public void delete(String memberId) throws SQLException {
+    public void delete(String memberId) {
         String sql = "delete from member where member_id = ?";
         Connection con = null;
         PreparedStatement pstmt = null;
@@ -96,42 +107,23 @@ public class MemberRepositoryV0 implements MemberRepositoryEx {
             pstmt.setString(1, memberId);
             pstmt.executeUpdate();
         } catch (SQLException e) {
-            log.error("db error", e);
-            throw e;
+            throw new MyDbException(e);
         } finally {
             close(con, pstmt, null);
         }
     }
 
     private void close (Connection con, Statement stmt, ResultSet rs) {
-
-        if (rs != null) {
-            try {
-                rs.close();
-            } catch (SQLException e) {
-                log.info("error", e);
-            }
-        }
-
-        if(stmt!=null) {
-            try {
-                stmt.close(); //Exception
-            } catch (SQLException e) {
-                log.info("error", e);
-            }
-        }
-
-        if(con!=null) {
-            try {
-                con.close();
-            } catch (SQLException e) {
-                log.info("error", e);
-            }
-        }
-
+        JdbcUtils.closeResultSet(rs);
+        JdbcUtils.closeStatement(stmt);
+        //주의! 트랜잭션 동기화를 사용하려면 DataSourceUtils를 사용해야 한다.
+        DataSourceUtils.releaseConnection(con, dataSource);
     }
 
-    private static Connection getConnection() {
-        return DBConnectionUtil.getConnection();
+    private Connection getConnection() {
+        //주의 트랜잭션 동기화를 사용하려면 DatasourceUtils를 사용해야 한다.
+        Connection con = DataSourceUtils.getConnection(dataSource);
+        log.info("get connection={}, class={}", con, con.getClass());
+        return con;
     }
 }

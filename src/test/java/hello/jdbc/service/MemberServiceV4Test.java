@@ -1,11 +1,11 @@
 package hello.jdbc.service;
 
 import hello.jdbc.domain.Member;
-import hello.jdbc.repository.MemberRepositoryV3;
+import hello.jdbc.repository.MemberRepository;
+import hello.jdbc.repository.MemberRepositoryV4_1;
 import lombok.extern.slf4j.Slf4j;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.support.AopUtils;
@@ -13,55 +13,49 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
 import java.sql.SQLException;
 
-import static hello.jdbc.connection.ConnectionConst.*;
-
 /**
- * 트랜잭션 - @Transactional AOP
+ * 예외 누수 문제 해결
+ * SQLException 제거
+ * MemberRepository 인터페이스 의존
  */
 @Slf4j
 @SpringBootTest
-class MemberServiceV3_3Test {
+class MemberServiceV4Test {
 
     public static final String Member_A = "memberA";
     public static final String Member_B = "memberB";
     public static final String Member_EX = "ex";
+
     @Autowired
-    private MemberServiceV3_3 memberService;
+    private MemberServiceV4 memberService;
     @Autowired
-    private MemberRepositoryV3 memberRepository;
+    private MemberRepository memberRepository;
 
-    @TestConfiguration
-    static class TestConfig {
-        @Bean
-        MemberServiceV3_3 memberServiceV3_3() {
-            return new MemberServiceV3_3(memberRepositoryV3());
-        }
+        @TestConfiguration
+        static class TestConfig {
+            private final DataSource dataSource;
 
-        @Bean
-        MemberRepositoryV3 memberRepositoryV3() {
-            return new MemberRepositoryV3(dataSource());
-        }
+            public TestConfig(DataSource dataSource) {
+                this.dataSource = dataSource;
+            }
 
-        @Bean
-        DataSource dataSource() {
-            return new DriverManagerDataSource(URL, USER, PASSWORD);
-        }
+            @Bean
+            MemberServiceV4 memberService() {
+                return new MemberServiceV4(memberRepository());
+            }
 
-        @Bean
-        PlatformTransactionManager transactionManager() {
-            return new DataSourceTransactionManager(dataSource());
+            @Bean
+            MemberRepository memberRepository() {
+                return new MemberRepositoryV4_1(dataSource);
+            }
         }
-    }
 
     @AfterEach
-    void after() throws SQLException {
+    void after() {
         memberRepository.delete(Member_A);
         memberRepository.delete(Member_B);
         memberRepository.delete(Member_EX);
@@ -77,7 +71,7 @@ class MemberServiceV3_3Test {
 
     @Test
     @DisplayName("정상 이체")
-    void accountTransfer() throws SQLException {
+    void accountTransfer() {
         //given
         Member memberA = new Member(Member_A, 10000);
         Member memberB = new Member(Member_B, 10000);
@@ -97,7 +91,7 @@ class MemberServiceV3_3Test {
 
     @Test
     @DisplayName("이채중 예외")
-    void accountTransferEx() throws SQLException {
+    void accountTransferEx() {
         //given
         Member memberA = new Member(Member_A, 10000);
         Member memberEx = new Member(Member_EX, 10000);
